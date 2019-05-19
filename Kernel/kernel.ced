@@ -68,6 +68,49 @@ _STACK:		equ	_IOAREA16    ; base da pilha na area do kernel
 ;	que deverá ser codificado na area do KERNEL (adiante)
 ;==============================================================================
 	org	_SISTEMA
+	CMP #KBHIT, R5
+	BEQ _chama_kbhit
+
+	CMP #GETCHAR, R5
+	BEQ _chama_getchar
+
+	CMP #GETTIME, R5
+	BEQ _chama_gettime
+
+	CMP #PUTCHAR, R5
+	BEQ _chama_putchar
+
+	CMP #PUTMSG, R5
+	BEQ _chama_putmsg
+
+	CMP #GETCLOCK, R5
+	BEQ _chama_getclock
+	
+	CMP #SETCLOCK, R5
+	BEQ _chama_setclock
+	RTS R7
+
+_chama_kbhit:
+	JSR R7, _KBHIT
+	RTS R7
+_chama_getchar:
+	JSR R7, _GETCHAR
+	RTS R7
+_chama_gettime:
+	JSR R7, _GETTIME
+	RTS R7
+_chama_putchar:
+	JSR R7, _PUTCHAR
+	RTS R7
+_chama_putmsg:
+	JSR R7, _PUTMSG
+	RTS R7
+_chama_getclock:
+	JSR R7, _GETCLOCK
+	RTS R7
+_chama_setclock:
+	JSR R7, _SETCLOCK
+	RTS R7
 ;	
 ;==============================================================================
 ;	O programa de aplicacao sera carregado aqui (enderecos 256 a 32767)
@@ -76,9 +119,16 @@ _STACK:		equ	_IOAREA16    ; base da pilha na area do kernel
 ;==============================================================================
 	org	_APP
 inicio:
-	MOV SEGUNDOS, R1
-	CMP #5, SEGUNDOS
+	CMP #1, SEGUNDOS
 	BNE inicio
+	MOV SEGUNDOS, R0
+loop:
+	CMP #2, SEGUNDOS
+	BNE loop
+	MOV SEGUNDOS, R1
+	MOV #TMP_MSG, R0
+	MOV #0, R1
+	JSR R7, _PUTMSG
 	HLT
 ;	
 ;==============================================================================
@@ -142,6 +192,97 @@ GETCLOCK: equ 5
 SETCLOCK: equ 6
 ;
 
+; Retorna 0 em R0 se não existe nenhum caracter no buffer e outro valor caso contrário
+_KBHIT:
+	CMP #-1, TECLA
+	BNE existe_caracter;
+	MOV #0, R0
+	RTS R7
+existe_caracter:
+	MOV #1, R0
+	RTS R7
+
+; Retorna em R0 o caracter disponível no buffer. Se este não existir, espera até que exista
+_GETCHAR:
+	CMP #-1, TECLA
+	BEQ _GETCHAR
+	MOV TECLA, R0
+	MOV #-1, TECLA
+	RTS R7
+
+; Retorna em R0 o contador de segundos do sistema (valor de 0 a 65535)
+_GETTIME:
+	MOV SEGUNDOS, R0
+	RTS R7
+
+; Printa um caracter no visor. R0 (LSB) deve conter o caracter e R1 (0 a 35) a posição do display.
+_PUTCHAR:
+	MOV R1, -(R6)
+	ADD #VISOR, R1
+	MOV R0, (R1)
+	MOV (R6)+, R1
+	RTS R7
+
+; Printa uma mensagem ASCIIZ de forma circular.
+; R0 deve conter o endereço da mensagem e R1 a posição inicial do display
+_PUTMSG:
+	MOV R0, -(R6)
+	MOV R1, -(R6)
+	MOV R2, -(R6)
+	ADD #VISOR, R1		; transforma o index em posição de memória
+__ESCREVE:
+	MOV -1(R0), R2		 ; começa de endereco da mensagem - 1 pra podermos usar 16 bits nas operações
+	AND #h00FF, R2		; zera byte mais significativo
+	CMP #0, R2		; verifica se é o fim da string
+	BNE __PRINTA_CHAR
+	MOV (R6)+, R2
+	MOV (R6)+, R1
+	MOV (R6)+, R0
+	RTS R7
+__PRINTA_CHAR:
+	MOV R2, (R1)
+	INC R0
+	INC R1
+	BEQ __FIM_DISPLAY
+	BR __ESCREVE
+__FIM_DISPLAY:
+	MOV #VISOR, R1
+	BR __ESCREVE
+
+; Retorna informações do relógio do kernel. R0 retorna a hora, R1 os minutos e R2 os segundos
+_GETCLOCK:
+	MOV HORA, R0
+	MOV MINUTO, R1
+	MOV SEGUNDO, R2
+	RTS R7
+
+; Recebe hora, minuto e segundo em R0, R1 e R2, respectivamente e seta o relógio do kernel
+; Retorna 0 em R0 em caso de sucesso e outro valor caso contrário
+_SETCLOCK:
+	CMP R0, #23
+	BGT __ERRO
+	CMP R0, #0
+	BLT __ERRO
+
+	CMP R1, #59
+	BGT __ERRO
+	CMP R1, #0
+	BLT __ERRO
+
+	CMP R2, #59
+	BGT __ERRO
+	CMP R2, #0
+	BLT __ERRO
+
+	MOV R0, HORA
+	MOV R1, MINUTO
+	MOV R2, SEGUNDO
+	MOV #0, R0
+	RTS R7
+__ERRO:
+	MOV #1, R0
+	RTS R7
+	
 ;
 ;==============================================================================
 ;	Rotinas de Tratamento das interrupcoes
@@ -160,6 +301,7 @@ HORA:           DW      0     ; hora do relógio (0 a 23)
 MINUTO:         DW      0     ; minuto da hora do relógio (0 a 59)
 SEGUNDO:        DW      0     ; segundo da hora do relógio (0 a 59)
 TICKS:		DW	0     ; ticks do timer
+TMP_MSG:	DAB	'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNO',0
 ;
 _ISR:
 MOV R0, -(R6)		; salva R0 porque a rotina usa esse registrador
@@ -174,12 +316,29 @@ AND #hFE, INTS		; desliga bit 0 (timer interrupt pending)
 MOV (R6)+, R0		; devolve o valor de R0
 RTI
 _incrementa_seg:
-INC SEGUNDOS		; incrementa a variavel de segundos
+INC SEGUNDOS		; incrementa a variavel de segundos do sistema
+INC SEGUNDO		; incrementa a variáevl de segundos do relogio
+CMP #60, SEGUNDO	; compara segundo com 60
+BNE _limpa_ticks	; se diferente, limpa ticks e sai da isr
+
+
+INC MINUTO		; se igual, incrementa o minuto e zera segundo
+CLR SEGUNDO		; zera segundo
+CMP #60, MINUTO		; compara minuto com 60
+BNE _limpa_ticks	; se diferente, limpa ticks e sai da isr
+
+INC HORA		; se igual, incrementa a hora
+CLR MINUTO		; e limpa minuto
+CMP #24, HORA		; compara hora com 24
+BNE _limpa_ticks	; se diferente, limpa ticks e sai da isr
+CLR HORA		; senão, limpa hora
+
+_limpa_ticks:
 CLR TICKS		; limpa os ticks do timer
 BR _sai_isr		; sai da ISR chamada pelo timer
 _teclado:
-MOV #'A', R2
-JSR R7,_S_PREENCHE_VISOR
+MOV TECDT, TECLA
+CLR TECST
 AND #hFD, INTS		; desliga bit 1 (keyboard interrupt pending)
 MOV (R6)+, R0		; devolve o valor de R0
 RTI
