@@ -1,0 +1,478 @@
+; ******************************************************************
+; * Excetuando nas chamadas com JSR para as funcoes do sistema,    *
+; * os endereços 0 a 255 da memoria nao devem ser acessados nem    * 
+; * modificados pelo programa principal desenvolvido na parte 1    *
+; * do trabalho. Eles deverao ser carregados no simulador antes do *
+; * programa principal, a partir do arquivo de teste que estara    *
+; * no Moodle da disciplina, denominado 'KERNEL_REF.MEM'.          *
+; ******************************************************************
+;
+;-----------------------------------------------------------------------
+; Definicao de enderecos necessarios para o desenvolvimento da aplicacao
+;-----------------------------------------------------------------------
+_APP:     equ 256 ; (h0100) inicio da do programa principal
+_SISTEMA: equ 128 ; (h0080) rotina que chama as funcoes do sistema
+;
+; Constantes com os codigos das funcoes do sistema (ver enunciado)
+kbhit:    equ 0
+getchar:  equ 1
+gettime:  equ 2
+putchar:  equ 3
+putmsg:   equ 4
+;
+; O programa principal ira ocupar os endereços 256 a 32767 da 
+; memoria. Ele nao devera acessar nem modificar nenhuma palavra
+; fora desta area, exceto com as chamadas JSR R7,_SISTEMA.
+;
+          org _APP
+;>---------------------------------------------------<
+
+; Inicializa printando meu nome e matricula no display
+INICIO:
+MOV #msg_autor,R0
+JSR R7, SR_PRINT_MESSAGE
+
+; Rotina que fica esperando um enter
+JSR R7,SR_ESPERA_ENTER
+
+; Limpa a tela e apresenta instruções
+MOV #msg_instrucoes,R0
+JSR R7,SR_PRINT_MESSAGE
+
+; Espera enter para printar próxima instrução do jogo
+JSR R7, SR_ESPERA_ENTER
+JSR R7, SR_LIMPA_DISP
+MOV #msg_instrucao_regra,R0
+JSR R7,SR_PRINT_MESSAGE
+
+JSR R7, SR_ESPERA_ENTER
+JSR R7, SR_LIMPA_DISP
+MOV #msg_instrucao_regra2,R0
+JSR R7,SR_PRINT_MESSAGE
+
+JSR R7, SR_ESPERA_ENTER
+JSR R7, SR_LIMPA_DISP
+MOV #msg_instrucao_regra3,R0
+JSR R7, SR_PRINT_MESSAGE
+
+; Espera um enter para começar o jogo
+JSR R7, SR_ESPERA_ENTER
+NOVO_JOGO:
+JSR R7, SR_LIMPA_DISP
+
+; Retorna em R0 o tempo de execução do programa
+CLR R0
+MOV #gettime, R5
+JSR R7, _SISTEMA
+; Pega apenas os quatro LSB, já que queremos um índice de 0 a 15 para a sequência
+MOV R0, tempo_inicial
+AND #h000F, R0
+MOV R0, seqs_index
+
+; Multiplica por 9 (tamanho de cada sequencia + \0) para somar com a base da tabela
+MOV #9, R3
+CLR R0
+MULTIPLICA:
+ADD seqs_index, R0
+SUB #1, R3
+CMP R3, #0
+BNE MULTIPLICA
+MOV R0, seqs_index
+
+; Busca na tabela a mensagem de index pseudo aleatório
+MOV #tab_seqs, R0
+ADD seqs_index, R0
+JSR R7, SR_PRINT_MESSAGE
+
+; Coloca o caracter ':' depois da sequência
+MOV #putchar,R5
+MOV #8, R1
+MOV #':', R0
+JSR R7, _SISTEMA
+; Coloca o cursor na posição inicial
+MOV #putchar, R5
+MOV #10, R1
+MOV #'_', R0
+JSR R7, _SISTEMA
+; Reseta o vetor input_salvo
+MOV #input_salvo, R2
+
+; Pega o input do usuário
+INPUT_USUARIO:
+MOV #getchar,R5
+JSR R7,_SISTEMA
+
+; Se for um ENTER, vai para FIM
+CMP R0, #13
+BEQ FIM
+
+; Se for um BACKSPACE
+CMP R0, #8
+BEQ INPUT_BACKSPACE
+
+; Se já foram digitados 9 caracteres (R1 == 18), ignora o que foi recebido
+CMP R1, #18
+BEQ INPUT_USUARIO
+
+; Se for menor que 48, é um caracter invalido
+CMP R0, #48
+BLT INPUT_USUARIO
+
+; Se for maior que 57 e menor que 65, é invalido
+CMP R0, #57
+BGT MAIOR_QUE_57
+JMP SALVA_CARACTER	; 48 <= c <= 57
+
+MAIOR_QUE_57:
+CMP R0, #65
+BLT INPUT_USUARIO	; 57 < c < 65
+
+; Se for maior que 65, precisa estar no intervalo [65,90] ou [97,122]
+CMP R0, #90
+BLE SALVA_CARACTER	; 65 <= c <= 90
+
+CMP R0, #97
+BLT INPUT_USUARIO	; 90 < c < 97
+
+CMP R0, #122
+BGT INPUT_USUARIO	; c > 122
+
+; Se chegou até aqui, o caracter é valido
+; salva o caracter para comparar depois
+SALVA_CARACTER:
+MOV R0, (R2)+
+; coloca na tela o caracter digitado
+MOV #putchar,R5
+JSR R7, _SISTEMA
+; atualiza o cursor
+ADD #1, R1
+MOV #'_', R0
+MOV #putchar,R5
+JSR R7, _SISTEMA
+JMP INPUT_USUARIO
+
+INPUT_BACKSPACE:
+; caso o cursor esteja em uma posição menor que 11, não existem caracteres
+; para serem apagados
+CMP R1, #11
+BLT INPUT_USUARIO
+; apaga o caracter da posição atual
+MOV #' ', R0
+MOV #putchar,R5
+JSR R7,_SISTEMA
+; volta uma posição e coloca o cursor nela
+SUB #1, R1
+MOV #'_', R0
+MOV #putchar,R5
+JSR R7, _SISTEMA
+; limpa e volta uma posição do R2
+SUB #2,R2
+CLR (R2)
+JMP INPUT_USUARIO
+
+FIM:
+MOV #input_salvo, R2
+MOV #8, R0
+
+ROTATE_LOOP:		; R2 contem coisas do tipo 00'A' 00'B' e preciso algo como 'A''B'
+ROL (R2)
+ROL (R2)
+ROL (R2)
+ROL (R2)
+ROL (R2)
+ROL (R2)
+ROL (R2)
+ROL (R2)
+
+MOV (R2),R3
+MOV 2(R2),R4
+OR R3, R4
+MOV R4, (R2)
+ADD #4, R2
+
+SUB #1, R0
+CMP R0, #0
+BNE ROTATE_LOOP
+
+MOV #input_salvo, R2	; Corrige as posições do vetor
+ADD #4, R2
+MOV (R2), -(R2)
+ADD #6, R2
+MOV (R2), -4(R2)
+ADD #4, R2
+MOV (R2), -6(R2)
+
+MOV #tab_seqs, R0	; Carrega em R0 o endereço da primeira sequência da tabela
+ADD seqs_index, R0	; Faz com que R0 aponte para a sequência mostrada ao usuário
+MOV #input_salvo, R2	; Faz com que R2 aponte para o input do usuário
+
+MOV #4, R3		; Inicializa o contador do loop com 4, já que as sequências tem 4 palavras (8 bytes)
+LOOP:			; Compara de palavra em palavra o input do usuário com o que foi mostrado
+CMP (R0)+,(R2)+
+BNE ERROU
+SUB #1, R3
+CMP R3 #0
+BNE LOOP
+JMP ACERTOU
+
+ACERTOU:		; Usuário digitou corretamente a sequência
+MOV #' ', R0		; Apaga o cursor. R1 contém a posição.
+MOV #putchar,R5
+JSR R7, _SISTEMA
+MOV #20, R1
+MOV #'-', R0
+MOV #putchar,R5
+JSR R7, _SISTEMA
+ADD #2, R1
+MOV #putmsg,R5
+MOV #msg_certo, R0
+JSR R7, _SISTEMA
+JSR R7, SR_PRINT_TIME
+JMP PERGUNTA_NOVO_JOGO
+
+ERROU:			; Usuário errou
+MOV #' ', R0		; Apaga o cursor. R1 contém a posição.
+MOV #putchar,R5
+JSR R7, _SISTEMA
+MOV #20, R1
+MOV #'-', R0
+MOV #putchar,R5
+JSR R7, _SISTEMA
+ADD #2, R1
+MOV #putmsg,R5
+MOV #msg_errou, R0
+JSR R7, _SISTEMA
+JSR R7, SR_PRINT_TIME
+JMP PERGUNTA_NOVO_JOGO
+
+PERGUNTA_NOVO_JOGO:
+JSR R7, SR_ESPERA_ENTER
+JSR R7, SR_LIMPA_DISP
+MOV #msg_novo_jogo,R0
+JSR R7, SR_PRINT_MESSAGE
+
+ULTIMA_OPCAO:
+MOV #getchar,R5
+JSR R7, _SISTEMA
+CMP R0, #'J'
+BEQ NOVO_JOGO_WRAPPER
+CMP R0, #'j'
+BEQ NOVO_JOGO_WRAPPER
+CMP R0, #'T'
+BEQ ENCERRAR
+CMP R0, #'t'
+BEQ ENCERRAR
+JMP ULTIMA_OPCAO
+
+NOVO_JOGO_WRAPPER:
+JMP NOVO_JOGO
+
+ENCERRAR:
+MOV #msg_fim_de_jogo, R0
+JSR R7, SR_PRINT_MESSAGE
+HLT
+
+
+;>---------------------------------------------------<
+;		     SUBROTINAS
+;>---------------------------------------------------<
+
+SR_ESPERA_ENTER:
+; Espera por um caracter e salva em R0
+ESPERA_ENTER:
+MOV #getchar,R5
+JSR R7,_SISTEMA
+; Verifica se é um enter
+CMP R0,#13
+BNE ESPERA_ENTER
+RTS R7
+
+SR_LIMPA_DISP:
+MOV #putmsg,R5
+CLR R1
+MOV #msg_limpa_disp,R0
+JSR R7, _SISTEMA
+RTS R7
+
+SR_PRINT_MESSAGE:
+MOV #putmsg, R5
+CLR R1
+JSR R7, _SISTEMA
+RTS R7
+
+SR_PRINT_TIME:
+; printa a string 'seg' no final do display
+MOV #putchar,R5
+MOV #33, R1
+MOV #'s',R0
+JSR R7, _SISTEMA
+MOV #putchar,R5
+MOV #34, R1
+MOV #'e',R0
+JSR R7, _SISTEMA
+MOV #putchar,R5
+MOV #35, R1
+MOV #'g',R0
+JSR R7, _SISTEMA
+; pega o tempo final
+MOV #gettime,R5		; move pra R5 o endereço da subrotina gettime
+JSR R7, _SISTEMA	; chama a subrotina gettime, que retorna o tempo de execução em R0
+MOV tempo_inicial, R1	; salva o tempo inicial em R1
+SUB R1, R0		; dest = dest - src ----> R0 = R0 - R1 = TF - TI
+MOV R0, delta_tempo
+CMP R0, #1000
+BLT PRINTA_NUMEROS
+; printa 999 porque o timer passou de 999
+MOV #'9',R0
+MOV #putchar,R5
+MOV #29, R1
+JSR R7, _SISTEMA
+MOV #putchar,R5
+MOV #30, R1
+JSR R7, _SISTEMA
+MOV #putchar,R5
+MOV #31, R1
+JSR R7, _SISTEMA
+PRINTA_NUMEROS:
+; printa a centena
+PRINTA_CENTENA:
+MOV delta_tempo, R1	; Coloca o LSB do dividor em R1 (O dividor é de 32 bits, então LSB é o próprio delta_tempo)
+CLR R0			; Limpa os 16 bits mais significativos do dividendo
+MOV #100, R2		; Move o divisor 100 para o R2
+JSR R7,_S_DIVIDIR	; Chama a subrotina de divisao, que retorna o resultado em R0 e o resto em R1
+MOV R1, resto		; Salva o resto em uma variável porque R1 é usado pra indicar a posição do display
+ADD #48,R0		; Transforma em um caracter printavel
+MOV R0, R4		; Salva uma cópia da centena em R4
+CMP R0, #48		; Verifica se a centena é zero
+BEQ PRINTA_DEZENA	; Se for, printa apenas a dezena
+MOV #putchar,R5		; Prepara a chamada de putchar
+MOV #29, R1		; Indica que o caracter deve ir para a posição 29 do display
+JSR R7, _SISTEMA	; Chama a subrotina putchar para printar a centena
+
+; printa a dezena
+PRINTA_DEZENA:
+CLR R0			; Limpa R0
+MOV resto, R1		; Carrega R1 com o resto da última divisão
+MOV #10, R2		; Move o divisor 10 para o R2
+JSR R7, _S_DIVIDIR	; Chama a subrotina de divisao, que retorna o resultado em R0 e o resto em R1
+MOV R1, resto		; Salva o resto em uma variável porque R1 é usado para indicar a posição do display
+ADD #48, R0		; Transforma em um caracter printavel
+CMP R4, #48		; Verifica se a centena é zero
+BEQ CENTENA_ZERO	; Se for, desvia para CENTENA_ZERO
+MOV #putchar,R5		; Prepara a chamada de putchar
+MOV #30, R1		; Indica que o caracter deve ir para a posição 30 do display
+JSR R7, _SISTEMA	; Chama a subrotina putchar para printar a dezena
+JMP PRINTA_UNIDADE	; Se a centena for diferente de zero, printa a dezena
+
+CENTENA_ZERO:		; Se centena == 0 &&
+CMP R0, #48		;    dezena == 0
+BEQ PRINTA_UNIDADE	; Printa somente a unidade
+MOV #putchar,R5		; Prepara a chamada de putchar
+MOV #30, R1		; Indica que o caracter deve ir para a posição 30 do display
+JSR R7, _SISTEMA	; Chama a subrotina putchar para printar a dezena
+
+; printa a unidade
+PRINTA_UNIDADE:
+MOV resto, R0		; Move o resto para R0
+ADD #48, R0		; Transforma em um caractere printável
+MOV #putchar,R5		; Prepara a chamada de putchar
+MOV #31, R1		; Indica que o caracter deve ir para a posição 31 do display
+JSR R7, _SISTEMA	; Chama a subrotina putchar para printar a unidade
+RTS R7
+
+; Subrotina de divisao da BibCesar V16
+;> MOV #msbitsdividendo,R0      ; 16 bits mais significativos do dividendo
+;> MOV #lsbitsdividendo,R1      ; 16 bits menos significativos do dividendo
+;> MOV #divisor,R2              ; divisor (16 bits)
+;> JSR R7,_S_DIVIDIR
+_S_DIVIDIR:
+          TST R2                ; testa divisor
+          BNE __NAO_ZERO        ; se <> zero, continua
+          CCC V                 ; indica divisao por zero
+          RTS R7                ; retorna ao ponto de chamada
+
+__NAO_ZERO:
+          CMP R0,R2             ; testa se dividendo(msb)
+                                ; e' >= que o divisor
+          BCC __INDICA_ESTOURO  ; se for, indicar estouro
+                                ; note: BCC equivale a um
+                                ; BGE para int. positivos
+;>
+          MOV R3,-(R6)          ; salva R3 na pilha
+          MOV R4,-(R6)          ; salva R4 na pilha
+          MOV R5,-(R6)          ; salva R5 na pilha
+          MOV R0,R3             ; copia dividendo para
+          MOV R1,R4             ; R3 e R4 (=q no final)
+          MOV #16,R5            ; inicializa contador
+          ASL R4                ; desloca dividendo p/a
+          ROL R3                ; esquerda e abre espaco
+          BCS __SUBTRAI_DIVISOR ; p/um bit do quociente
+          CMP R3,R2             ; se n+1 msbits do divid.
+          BCS __BIT_ZERO        ; maiores que divisor (= BLT p/inteiros positivos)
+__SUBTRAI_DIVISOR:
+          SUB R2,R3             ; subtrai divisor e
+          INC R4                ; ajusta bit do quociente
+__BIT_ZERO:
+          SOB R5,16             ; decr. R5; se <>0, repete
+          MOV R3,R1             ; copia resto para R1
+          MOV R4,R0             ; copia quociente p/R0
+          MOV (R6)+,R5          ; restaura
+          MOV (R6)+,R4          ; registradores
+          MOV (R6)+,R3          ; de trabalho
+          CCC V Z               ; limpa cod. de condicao
+          RTS R7                ; retorna ao ponto de chamada
+;>
+__INDICA_ESTOURO:
+          SCC V                 ; indica overflow e nao
+          CCC Z                 ; divisao por zero
+          RTS R7                ; retorna ao ponto de chamada
+
+msg_autor:		dab	' Jean Diego Silva Fontena  00282716 ',0
+msg_instrucoes:		dab	'Aperte enter para ver as instrucoes.',0
+msg_instrucao_regra:	dab	'Digite a sequencia mostrada no  ...>',0
+msg_instrucao_regra2:	dab	'menor tempo possivel! Pressione ...>',0
+msg_instrucao_regra3:	dab	'enter para iniciar o jogo. Boa sorte',0
+msg_limpa_disp:		dab	'                                    ',0
+msg_certo:		dab	'certo,',0
+msg_errou:		dab	'errou,',0
+msg_novo_jogo:		dab	'Novo jogo (J/j) ou terminar (T/t)?',0
+msg_fim_de_jogo:	dab	'            Fim de jogo!            ',0
+
+tab_seqs:		dab	'FJMVkldE',0	; índice 0  = tab_seqs + 0
+			dab	'J1j2Klmn',0	; índice 1  = tab_seqs + 9
+			dab	'INFJKLMN',0	; índice 2  = tab_seqs + 18
+			dab	'MiSuNdER',0	; índice 3  = tab_seqs + 27
+			dab	'AnYwAy20',0	; índice 4  = tab_seqs + 36
+			dab	'AEqjUlaq',0	; índice 5  = tab_seqs + 45
+			dab	'ABCDEFGH',0	; índice 6  = tab_seqs + 54
+			dab	'12345678',0	; índice 7  = tab_seqs + 63
+			dab	'RapIDsqF',0	; índice 8  = tab_seqs + 72
+			dab	'TYMaKERL',0	; índice 9  = tab_seqs + 81
+			dab	'LackEFAM',0	; índice 10 = tab_seqs + 90
+			dab	'MAQnRSFL',0	; índice 11 = tab_seqs + 99
+			dab	'PressURe',0	; índice 12 = tab_seqs + 108
+			dab	'MfeAJcmE',0	; índice 13 = tab_seqs + 117
+			dab	'SimpSons',0	; índice 14 = tab_seqs + 126
+			dab	'HIMYMS03',0	; índice 15 = tab_seqs + 135
+
+seqs_index:		db	0
+lookup_table:		dw	0		; do not remove
+input_salvo:		dab	0,0,0,0,0,0,0,0
+; This org doesn't make sense and shouldnt be necessary, but it 
+; somehow fixes a memory error that is probably generated when
+; the user input is moved around after ROTATE_LOOP.
+; The vector lookup_table shouldn't be here too.
+org 2000		
+tempo_inicial:		dw	0
+delta_tempo:		dw	0
+resto:			dw	0
+
+;>---------------------------------------------------<
+;
+; ******************************************************************
+; * Os endereços 32768 a 65535 da memoria nao devem ser acessados  * 
+; * nem modificados pelo programa principal desenvolvido na parte  *
+; * 1 do trabalho. Eles deverao ser carregados no simulador antes  *
+; * do programa principal, a partir do arquivo de teste que estara *
+; * no Moodle da disciplina, denominado 'KERNEL_REF.MEM'.          *
+; ******************************************************************
