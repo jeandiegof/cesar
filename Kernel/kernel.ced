@@ -118,18 +118,7 @@ _chama_setclock:
 ;	a carga parcial dos programas usados para testar o KERNEL
 ;==============================================================================
 	org	_APP
-inicio:
-	CMP #1, SEGUNDOS
-	BNE inicio
-	MOV SEGUNDOS, R0
-loop:
-	CMP #2, SEGUNDOS
-	BNE loop
-	MOV SEGUNDOS, R1
-	MOV #TMP_MSG, R0
-	MOV #0, R1
-	JSR R7, _PUTMSG
-	HLT
+
 ;	
 ;==============================================================================
 ;	Area para o kernel
@@ -152,7 +141,7 @@ MOV #65408, R6
 
 ; 3) Inicializar as variaveis internas usadas pelo sistema de interrupcoes (IVET, INTE, etc.)
 MOV #_ISR, IVET
-MOV #h03, INTE
+MOV #h03, INTE		; configura interrupçõa de teclado e timer, mas não inicia
 
 ; 4) Inicializar as variaveis internas do kernel
 CLR TICKS
@@ -160,7 +149,7 @@ CLR SEGUNDOS
 CLR SEGUNDO
 CLR MINUTO
 CLR HORA
-MOV #-1, TECLA
+MOV #-1, TECLA		; -1 em tecla representa que não há caracter nenhum no buffer
 
 ; 5) Inicializar o teclado zerando o byte de estado (TECST, endereco 65498)
 CLR TECST
@@ -172,7 +161,7 @@ MOV #200, TIMDT
 JSR R7,_S_LIMPA_VISOR_ULTRA
 
 ; 8) Habilitar interrupcoes
-OR #h80, INTE
+OR #h80, INTE		; habilita as interrupções
 
 ; 9) Retornar para o programa de aplicacao com um desvio para o endereco 256 (H0100) da memoria
 JMP _APP
@@ -260,20 +249,21 @@ _GETCLOCK:
 ; Retorna 0 em R0 em caso de sucesso e outro valor caso contrário
 _SETCLOCK:
 	CMP R0, #23
-	BGT __ERRO
+	BGT __ERRO	; caso seja maior que 23
 	CMP R0, #0
-	BLT __ERRO
+	BLT __ERRO	; caso seja menor que 0
 
 	CMP R1, #59
-	BGT __ERRO
+	BGT __ERRO	; caso seja maior que 59
 	CMP R1, #0
-	BLT __ERRO
+	BLT __ERRO	; caso seja menor que 0
 
-	CMP R2, #59
-	BGT __ERRO
+	CMP R2, #59	
+	BGT __ERRO	; caso seja maior que 59
 	CMP R2, #0
-	BLT __ERRO
+	BLT __ERRO	; caso seja menor que 0
 
+	CLR TICKS
 	MOV R0, HORA
 	MOV R1, MINUTO
 	MOV R2, SEGUNDO
@@ -301,7 +291,6 @@ HORA:           DW      0     ; hora do relógio (0 a 23)
 MINUTO:         DW      0     ; minuto da hora do relógio (0 a 59)
 SEGUNDO:        DW      0     ; segundo da hora do relógio (0 a 59)
 TICKS:		DW	0     ; ticks do timer
-TMP_MSG:	DAB	'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNO',0
 ;
 _ISR:
 MOV R0, -(R6)		; salva R0 porque a rotina usa esse registrador
@@ -347,77 +336,147 @@ RTI
 ;
 ; >>>>>>>>> INSERIR AQUI AS SUB-ROTINAS DA BIBCESAR V16, SE FOR USAR <<<<<<<<<
 ;
-;> Subrotina "ultra rapida" para "limpar" o visor (135 acessos)
-;>
-;> Chamada da subrotina:
-;>
-;> JSR R7,_S_LIMPA_VISOR_ULTRA
-;>
-_S_LIMPA_VISOR_ULTRA:
-          MOV R0,-(R6)          ; salva R0 na pilha
-          MOV R1,-(R6)          ; salva R1 na pilha
-          MOV #65500,R0         ; move end. do LED 0 do visor p/R1
-          MOV #65501,R1         ; move end. do LED 1 do visor p/R1
-          CLR (R0)+             ; limpa LED 00 do visor e soma 2 ao R0
-          CLR (R1)+             ; limpa LED 01 do visor e soma 2 ao R1
-          CLR (R0)+             ; limpa LED 02 do visor e soma 2 ao R0
-          CLR (R1)+             ; limpa LED 03 do visor e soma 2 ao R1
-          CLR (R0)+             ; limpa LED 04 do visor e soma 2 ao R0
-          CLR (R1)+             ; limpa LED 05 do visor e soma 2 ao R1
-          CLR (R0)+             ; limpa LED 06 do visor e soma 2 ao R0
-          CLR (R1)+             ; limpa LED 07 do visor e soma 2 ao R1
-          CLR (R0)+             ; limpa LED 08 do visor e soma 2 ao R0
-          CLR (R1)+             ; limpa LED 09 do visor e soma 2 ao R1
-          CLR (R0)+             ; limpa LED 10 do visor e soma 2 ao R0
-          CLR (R1)+             ; limpa LED 11 do visor e soma 2 ao R1
-          CLR (R0)+             ; limpa LED 12 do visor e soma 2 ao R0
-          CLR (R1)+             ; limpa LED 13 do visor e soma 2 ao R1
-          CLR (R0)+             ; limpa LED 14 do visor e soma 2 ao R0
-          CLR (R1)+             ; limpa LED 15 do visor e soma 2 ao R1
-          CLR (R0)+             ; limpa LED 16 do visor e soma 2 ao R0
-          CLR (R1)+             ; limpa LED 17 do visor e soma 2 ao R1
-          CLR (R0)+             ; limpa LED 18 do visor e soma 2 ao R0
-          CLR (R1)+             ; limpa LED 19 do visor e soma 2 ao R1
-          CLR (R0)+             ; limpa LED 20 do visor e soma 2 ao R0
-          CLR (R1)+             ; limpa LED 21 do visor e soma 2 ao R1
-          CLR (R0)+             ; limpa LED 22 do visor e soma 2 ao R0
-          CLR (R1)+             ; limpa LED 23 do visor e soma 2 ao R1
-          CLR (R0)+             ; limpa LED 24 do visor e soma 2 ao R0
-          CLR (R1)+             ; limpa LED 25 do visor e soma 2 ao R1
-          CLR (R0)+             ; limpa LED 26 do visor e soma 2 ao R0
-          CLR (R1)+             ; limpa LED 27 do visor e soma 2 ao R1
-          CLR (R0)+             ; limpa LED 28 do visor e soma 2 ao R0
-          CLR (R1)+             ; limpa LED 29 do visor e soma 2 ao R1
-          CLR (R0)+             ; limpa LED 30 do visor e soma 2 ao R0
-          CLR (R1)+             ; limpa LED 31 do visor e soma 2 ao R1
-          CLR (R0)+             ; limpa LED 32 do visor e soma 2 ao R0
-          CLR (R1)+             ; limpa LED 33 do visor e soma 2 ao R1
-          CLR (R0)+             ; limpa LED 34 do visor e soma 2 ao R0
-          CLR (R1)+             ; limpa LED 35 do visor e soma 2 ao R1
-          MOV (R6)+,R1          ; restaura R1
-          MOV (R6)+,R0          ; restaura R0
-          RTS R7                ; retorna ao ponto de chamada
+;> Subrotina "ultra rapida" para "limpar" o visor (135 acessos)
+
 ;>
-;>
-;> Subrotina para "preencher" o visor com um caractere
-;>
-;> Chamada da subrotina:
-;>
-;> MOV #codASCII,R2             ; colocar no R2 o caractere a ser usado
-;> JSR R7,_S_PREENCHE_VISOR
-;>
-_S_PREENCHE_VISOR:
-          MOV R0,-(R6)          ; salva R0 na pilha
-          MOV R1,-(R6)          ; salva R1 na pilha
-          MOV #65500,R1         ; move end. do visor p/R1
-          MOV #36,R0            ; move 36 para contador
-__MAIS1_LED:
-          MOV R2,(R1)           ; move caractere p/1 LED do visor
-          INC R1                ; aponta p/LED seguinte
-          SOB R0,__MAIS1_LED    ; subtrai 1 do contador
-                                ; se <> 0, repete o laco
-          MOV (R6)+,R1          ; restaura R1
-          MOV (R6)+,R0          ; restaura R0
+
+;> Chamada da subrotina:
+
+;>
+
+;> JSR R7,_S_LIMPA_VISOR_ULTRA
+
+;>
+
+_S_LIMPA_VISOR_ULTRA:
+
+          MOV R0,-(R6)          ; salva R0 na pilha
+
+          MOV R1,-(R6)          ; salva R1 na pilha
+
+          MOV #65500,R0         ; move end. do LED 0 do visor p/R1
+
+          MOV #65501,R1         ; move end. do LED 1 do visor p/R1
+
+          CLR (R0)+             ; limpa LED 00 do visor e soma 2 ao R0
+
+          CLR (R1)+             ; limpa LED 01 do visor e soma 2 ao R1
+
+          CLR (R0)+             ; limpa LED 02 do visor e soma 2 ao R0
+
+          CLR (R1)+             ; limpa LED 03 do visor e soma 2 ao R1
+
+          CLR (R0)+             ; limpa LED 04 do visor e soma 2 ao R0
+
+          CLR (R1)+             ; limpa LED 05 do visor e soma 2 ao R1
+
+          CLR (R0)+             ; limpa LED 06 do visor e soma 2 ao R0
+
+          CLR (R1)+             ; limpa LED 07 do visor e soma 2 ao R1
+
+          CLR (R0)+             ; limpa LED 08 do visor e soma 2 ao R0
+
+          CLR (R1)+             ; limpa LED 09 do visor e soma 2 ao R1
+
+          CLR (R0)+             ; limpa LED 10 do visor e soma 2 ao R0
+
+          CLR (R1)+             ; limpa LED 11 do visor e soma 2 ao R1
+
+          CLR (R0)+             ; limpa LED 12 do visor e soma 2 ao R0
+
+          CLR (R1)+             ; limpa LED 13 do visor e soma 2 ao R1
+
+          CLR (R0)+             ; limpa LED 14 do visor e soma 2 ao R0
+
+          CLR (R1)+             ; limpa LED 15 do visor e soma 2 ao R1
+
+          CLR (R0)+             ; limpa LED 16 do visor e soma 2 ao R0
+
+          CLR (R1)+             ; limpa LED 17 do visor e soma 2 ao R1
+
+          CLR (R0)+             ; limpa LED 18 do visor e soma 2 ao R0
+
+          CLR (R1)+             ; limpa LED 19 do visor e soma 2 ao R1
+
+          CLR (R0)+             ; limpa LED 20 do visor e soma 2 ao R0
+
+          CLR (R1)+             ; limpa LED 21 do visor e soma 2 ao R1
+
+          CLR (R0)+             ; limpa LED 22 do visor e soma 2 ao R0
+
+          CLR (R1)+             ; limpa LED 23 do visor e soma 2 ao R1
+
+          CLR (R0)+             ; limpa LED 24 do visor e soma 2 ao R0
+
+          CLR (R1)+             ; limpa LED 25 do visor e soma 2 ao R1
+
+          CLR (R0)+             ; limpa LED 26 do visor e soma 2 ao R0
+
+          CLR (R1)+             ; limpa LED 27 do visor e soma 2 ao R1
+
+          CLR (R0)+             ; limpa LED 28 do visor e soma 2 ao R0
+
+          CLR (R1)+             ; limpa LED 29 do visor e soma 2 ao R1
+
+          CLR (R0)+             ; limpa LED 30 do visor e soma 2 ao R0
+
+          CLR (R1)+             ; limpa LED 31 do visor e soma 2 ao R1
+
+          CLR (R0)+             ; limpa LED 32 do visor e soma 2 ao R0
+
+          CLR (R1)+             ; limpa LED 33 do visor e soma 2 ao R1
+
+          CLR (R0)+             ; limpa LED 34 do visor e soma 2 ao R0
+
+          CLR (R1)+             ; limpa LED 35 do visor e soma 2 ao R1
+
+          MOV (R6)+,R1          ; restaura R1
+
+          MOV (R6)+,R0          ; restaura R0
+
+          RTS R7                ; retorna ao ponto de chamada
+
+;>
+;>
+
+;> Subrotina para "preencher" o visor com um caractere
+
+;>
+
+;> Chamada da subrotina:
+
+;>
+
+;> MOV #codASCII,R2             ; colocar no R2 o caractere a ser usado
+
+;> JSR R7,_S_PREENCHE_VISOR
+
+;>
+
+_S_PREENCHE_VISOR:
+
+          MOV R0,-(R6)          ; salva R0 na pilha
+
+          MOV R1,-(R6)          ; salva R1 na pilha
+
+          MOV #65500,R1         ; move end. do visor p/R1
+
+          MOV #36,R0            ; move 36 para contador
+
+__MAIS1_LED:
+
+          MOV R2,(R1)           ; move caractere p/1 LED do visor
+
+          INC R1                ; aponta p/LED seguinte
+
+          SOB R0,__MAIS1_LED    ; subtrai 1 do contador
+
+                                ; se <> 0, repete o laco
+
+          MOV (R6)+,R1          ; restaura R1
+
+          MOV (R6)+,R0          ; restaura R0
+
           RTS R7                ; retorna ao ponto de chamada
 ;
 ;------------------------------------------------------------------------------
