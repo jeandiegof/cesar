@@ -1,0 +1,30 @@
+TECLADO:
+	TECST:	65499	Buffer		byte
+	TECDT:	65498	Input state	byte
+TIMER: 
+	TIMDT:	65495	Timer period	byte	0-255 (0 = 100 ms)
+
+INTERRUPTS:
+	IVET:	65470	ISR address	word
+	INTE:	65497	INT enable	byte
+	INTS:	65496	INT state	byte
+
+DISPLAY:
+	VISOR: 	
+	
+Example - Interrupt vector
+	MOV #ISR, 65470		; Register interrupt callback
+
+Example - Interrupt enable (INTE)
+	Bit 7: interrupt enable
+	Bit 1: interrupt enable source 1 (keyboard)
+	Bit 0: interrupt enable source 0 (timer)
+
+Example - Interrupt status (INTS)
+	Bit 7: interrupt pending (isr callback running - controlled by hw)
+	Bit 1: interrupt pending source 1 (must be tested to identify the interrupt source - cleared by sw)
+	Bit 0: interrupt pending source 0 (must be tested to identify the interrupt source - cleared by sw)
+
+Example - returning from interrupt
+	RTI must be used over RTS, since the processor state must be recovered (pc, NZCV, etc)
+	
